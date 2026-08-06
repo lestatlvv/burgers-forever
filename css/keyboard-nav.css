@@ -1,0 +1,62 @@
+/* Keyboard / kiosk focus affordances */
+
+/* Keep Add-to-Basket buttons inside each card so layout/hit areas stay sane */
+.kb-nav-enabled .productcontainer {
+  position: relative;
+  cursor: pointer;
+}
+
+.kb-nav-enabled :focus {
+  outline: none;
+}
+
+.kb-nav-enabled .kb-focused {
+  outline: 4px solid var(--hot-pink, #eb5e92);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 6px rgba(232, 230, 113, 0.55), 10px 10px 0 0 var(--blue, #394394);
+  position: relative;
+  z-index: 5;
+}
+
+.kb-nav-enabled a.startorderbtn.kb-focused,
+.kb-nav-enabled a.checkoutbtn.kb-focused,
+.kb-nav-enabled a.screen-01.kb-focused,
+.kb-nav-enabled a.add-to-basket.kb-focused {
+  transform: scale(1.03);
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
+}
+
+.kb-nav-enabled .productcontainer.kb-focused {
+  outline: 4px solid var(--hot-pink, #eb5e92);
+  outline-offset: 6px;
+  background-color: #fff7d6;
+}
+
+.kb-nav-enabled .productcontainer.kb-focused .add-to-basket {
+  background-color: var(--hot-pink, #eb5e92);
+  color: var(--white, #fff);
+}
+
+.kb-nav-enabled a.cart-button.kb-focused {
+  outline-offset: 8px;
+}
+
+.kb-nav-enabled a.close-button.kb-focused {
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Subtle pulse so focus is obvious on a kiosk screen */
+@keyframes kb-pulse {
+  0%,
+  100% {
+    outline-color: var(--hot-pink, #eb5e92);
+  }
+  50% {
+    outline-color: var(--yellow, #e8e671);
+  }
+}
+
+.kb-nav-enabled .kb-focused {
+  animation: kb-pulse 1.4s ease-in-out infinite;
+}

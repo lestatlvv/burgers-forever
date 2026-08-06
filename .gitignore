@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Local service runtime
+.services.pids
+.store.log
+.tts.log
+*.log
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+
+# Env & OS
+.env
+.env.*
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*~

@@ -1,0 +1,12 @@
+{
+  "name": "burgers-forever-qa",
+  "private": true,
+  "scripts": {
+    "start:all": "bash scripts/start-all.sh",
+    "stop:all": "bash scripts/stop-all.sh",
+    "test:order": "playwright test tests/customer-order-stability.spec.js --reporter=list"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2"
+  }
+}
