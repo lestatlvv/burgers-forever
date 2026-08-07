@@ -5,7 +5,12 @@ node_modules/
 .services.pids
 .store.log
 .tts.log
+.boot.log
 *.log
+
+# Kiosk browser profile (Chrome/Edge user data from start:kiosk / autostart)
+.kiosk-browser-profile/
+.kiosk-browser-profile-test/
 
 # Playwright
 test-results/
