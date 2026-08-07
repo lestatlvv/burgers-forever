@@ -84,9 +84,8 @@
   font-weight: 500;
   line-height: 1.2;
   white-space: nowrap;
-  pointer-events: auto;
+  pointer-events: none;
   user-select: none;
-  cursor: default;
   box-shadow: none;
 }
 

@@ -68,7 +68,7 @@
         'align-items:center;gap:3px;padding:2px 5px;border:0;border-radius:0;' +
         'background:transparent;color:rgba(30,32,38,0.55);' +
         'font:500 12px/1.2 ui-monospace,Consolas,monospace;white-space:nowrap;' +
-        'pointer-events:auto;user-select:none;cursor:default;box-shadow:none;'
+        'pointer-events:none;user-select:none;box-shadow:none;'
     );
     statusEl.innerHTML =
       '<span class="kiosk-tts-status__conn" data-role="connection"></span>' +
@@ -90,18 +90,6 @@
     return '–';
   }
 
-  function statusTitle() {
-    var conn =
-      connectionStatus === 'connected'
-        ? 'connected'
-        : connectionStatus === 'no-connection'
-          ? 'no connection'
-          : 'checking';
-    var warm =
-      warmStatus === 'warming' ? 'warming up' : warmStatus === 'warmed' ? 'warmed up' : 'idle';
-    return 'TTS ' + conn + ' · ' + warm;
-  }
-
   function renderStatusHud() {
     if (!statusEl) return;
     var conn = statusEl.querySelector('[data-role="connection"]');
@@ -116,7 +104,6 @@
     }
     statusEl.setAttribute('data-connection', connectionStatus);
     statusEl.setAttribute('data-warmup', warmStatus);
-    statusEl.setAttribute('title', statusTitle());
   }
 
   function setConnectionStatus(next) {
@@ -581,7 +568,6 @@
       return Promise.resolve({ source: 'empty' });
     }
     if (memory[text] && memoryBuffers[text]) {
-      log('cache hit (memory):', clipLabel(text));
       return Promise.resolve({ source: 'memory' });
     }
 
@@ -589,7 +575,6 @@
     return idbGet(key).then(function (stored) {
       if (stored) {
         rememberBlob(text, new Blob([stored], { type: 'audio/wav' }), stored);
-        log('cache hit (IndexedDB → memory):', clipLabel(text));
         return { source: 'indexeddb' };
       }
       if (backend !== 'kokoro') {
