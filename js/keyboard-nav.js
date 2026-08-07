@@ -34,6 +34,9 @@
   };
 
   var volumeLevel = 1;
+  var volumeHud = null;
+  var volumeHideTimer = null;
+  var VOLUME_SHOW_MS = 2500;
 
   // Prefer whole product cards over nested absolute buttons
   var SELECTOR = [
@@ -412,9 +415,46 @@
     el.click();
   }
 
+  function ensureVolumeHud() {
+    if (volumeHud) return volumeHud;
+    if (!document.body) return null;
+    volumeHud = document.createElement('div');
+    volumeHud.id = 'kiosk-volume-status';
+    volumeHud.className = 'kiosk-volume-status';
+    volumeHud.setAttribute('aria-hidden', 'true');
+    volumeHud.hidden = true;
+    volumeHud.setAttribute(
+      'style',
+      'position:fixed;left:40px;bottom:18px;z-index:2147483646;' +
+        'padding:2px 5px;border:0;background:transparent;' +
+        'color:rgba(30,32,38,0.55);font:500 12px/1.2 ui-monospace,Consolas,monospace;' +
+        'white-space:nowrap;pointer-events:none;user-select:none;'
+    );
+    document.body.appendChild(volumeHud);
+    return volumeHud;
+  }
+
+  function showVolumeStatus(level) {
+    var el = ensureVolumeHud();
+    if (!el) return;
+    var pct = Math.round(Math.max(0, Math.min(1, level)) * 100);
+    el.textContent = '🔊' + pct;
+    el.hidden = false;
+    el.classList.add('is-visible');
+    if (volumeHideTimer) clearTimeout(volumeHideTimer);
+    volumeHideTimer = setTimeout(function () {
+      el.classList.remove('is-visible');
+      el.hidden = true;
+      volumeHideTimer = null;
+    }, VOLUME_SHOW_MS);
+  }
+
   function applyVolume() {
-    volumeLevel = volumeLevel <= 0.34 ? 1 : Math.max(0, +(volumeLevel - 0.33).toFixed(2));
+    var pct = Math.round(volumeLevel * 100) - 15;
+    if (pct < 10) pct = 100;
+    volumeLevel = pct / 100;
     document.documentElement.style.setProperty('--kiosk-speech-volume', String(volumeLevel));
+    showVolumeStatus(volumeLevel);
     if (window.KioskGuide && window.KioskGuide.Phrases && window.SpeechEngine) {
       window.SpeechEngine.speak(window.KioskGuide.Phrases.volume(volumeLevel));
     }

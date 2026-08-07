@@ -158,8 +158,12 @@
       Phrases.anotherPurchase(),
       Phrases.volume(),
       Phrases.volume(1),
-      Phrases.volume(0.67),
-      Phrases.volume(0.34)
+      Phrases.volume(0.85),
+      Phrases.volume(0.7),
+      Phrases.volume(0.55),
+      Phrases.volume(0.4),
+      Phrases.volume(0.25),
+      Phrases.volume(0.1)
     ];
 
     CATEGORY_BY_INDEX.forEach(function (cat) {

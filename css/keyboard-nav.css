@@ -108,3 +108,29 @@
 .kiosk-tts-status [data-role='warmup'][data-state='warming'] {
   filter: none;
 }
+
+/* Ephemeral volume level — shown on V, auto-hides after a few seconds */
+.kiosk-volume-status {
+  position: fixed;
+  left: 40px;
+  bottom: 18px;
+  z-index: 2147483646;
+  padding: 2px 5px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(30, 32, 38, 0.55);
+  font-family: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.kiosk-volume-status.is-visible {
+  opacity: 1;
+}
