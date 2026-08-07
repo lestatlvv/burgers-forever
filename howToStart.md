@@ -12,6 +12,14 @@ npm stop              # stop both
 
 Aliases: `npm run start:all` / `npm run stop:all`.
 
+### Fullscreen + Windows boot autostart
+
+```bash
+npm run prepare:autostart   # install env + register logon task
+npm run start:kiosk         # start both services + open fullscreen UI (test)
+npm run uninstall:autostart # remove boot autostart
+```
+
 TTS is resolved from `../text-to-speech`, `../experiments/text-to-speech`, or `TTS_ROOT`.
 
 See `../HOW_TO_INSTALL_AND_RUN.md` for full prerequisites (Python, Node, VC++ Redistributable on Windows).

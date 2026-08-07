@@ -35,6 +35,64 @@ function portInUse(port, host) {
   });
 }
 
+function httpOk(url, timeoutMs = 2500) {
+  return new Promise((resolve) => {
+    const req = http.get(url, (res) => {
+      res.resume();
+      resolve(Boolean(res.statusCode && res.statusCode < 500));
+    });
+    req.on("error", () => resolve(false));
+    req.setTimeout(timeoutMs, () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
+
+function killPort(port) {
+  try {
+    if (isWin) {
+      const out = spawnSync(
+        "cmd.exe",
+        ["/c", `for /f "tokens=5" %a in ('netstat -ano ^| findstr :${port} ^| findstr LISTENING') do taskkill /PID %a /T /F`],
+        { encoding: "utf8", windowsHide: true }
+      );
+      // Fallback via PowerShell if needed
+      spawnSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-Command",
+          `Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }`,
+        ],
+        { windowsHide: true }
+      );
+      return out.status === 0;
+    }
+    spawnSync("sh", ["-c", `lsof -tiTCP:${port} -sTCP:LISTEN | xargs -r kill -9`], {
+      windowsHide: true,
+    });
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
+async function ensureFreshListener(port, host, healthUrl, label) {
+  const listening = await portInUse(port, host);
+  if (!listening) {
+    return false;
+  }
+  if (await httpOk(healthUrl)) {
+    console.log(`  • ${label} already running → ${healthUrl}`);
+    return true;
+  }
+  console.warn(`  • ${label} port ${port} is occupied but not healthy — restarting…`);
+  killPort(port);
+  await new Promise((r) => setTimeout(r, 500));
+  return false;
+}
+
 function waitForHttp(url, timeoutMs = 60000) {
   const started = Date.now();
   return new Promise((resolve, reject) => {
@@ -129,8 +187,8 @@ async function main() {
 
   console.log("Starting PoC services…");
 
-  if (await portInUse(STORE_PORT, STORE_HOST)) {
-    console.log(`  • Demo Store already running → ${storeUrl}/`);
+  if (await ensureFreshListener(STORE_PORT, STORE_HOST, `${storeUrl}/`, "Demo Store")) {
+    // already healthy
   } else {
     const python = findSystemPython();
     if (!python) {
@@ -148,8 +206,8 @@ async function main() {
     console.log(`  • Started Demo Store (pid ${child.pid}) → ${storeUrl}/`);
   }
 
-  if (await portInUse(TTS_PORT, TTS_HOST)) {
-    console.log(`  • Kokoro TTS already running → ${ttsUrl}/api/health`);
+  if (await ensureFreshListener(TTS_PORT, TTS_HOST, `${ttsUrl}/api/health`, "Kokoro TTS")) {
+    // already healthy
   } else {
     fs.writeFileSync(TTS_LOG, "");
     const env = {
