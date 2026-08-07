@@ -60,3 +60,52 @@
 .kb-nav-enabled .kb-focused {
   animation: kb-pulse 1.4s ease-in-out infinite;
 }
+
+/*
+ * Service-tech TTS status (not customer-facing).
+ * Small fixed chip — discreet, but contrast high enough to read up close.
+ */
+.kiosk-tts-status {
+  position: fixed;
+  left: 8px;
+  bottom: 18px;
+  z-index: 2147483646;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 5px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(30, 32, 38, 0.55);
+  font-family: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: auto;
+  user-select: none;
+  cursor: default;
+  box-shadow: none;
+}
+
+.kiosk-tts-status [data-role='connection'],
+.kiosk-tts-status [data-role='warmup'] {
+  display: inline-block;
+  min-width: 1em;
+  text-align: center;
+}
+
+.kiosk-tts-status [data-role='connection'][data-state='connected'],
+.kiosk-tts-status [data-role='warmup'][data-state='warmed'] {
+  filter: none;
+}
+
+.kiosk-tts-status [data-role='connection'][data-state='no-connection'] {
+  filter: none;
+}
+
+.kiosk-tts-status [data-role='warmup'][data-state='warming'] {
+  filter: none;
+}

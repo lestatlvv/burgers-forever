@@ -38,6 +38,12 @@
   var currentText = null; // joined key of active sequence / phrase
   var sequence = null; // { parts, index, gen, key }
   var warmQueue = Promise.resolve();
+  var generateInFlight = 0;
+  var warmStatus = 'idle'; // 'idle' | 'warming' | 'warmed'
+  var connectionStatus = 'unknown'; // 'unknown' | 'connected' | 'no-connection'
+  var statusEl = null;
+  var connectionProbeTimer = null;
+  var HEALTH_POLL_MS = 15000;
 
   function log() {
     if (window.console && console.info) {
@@ -45,6 +51,124 @@
       args.unshift('[speech]');
       console.info.apply(console, args);
     }
+  }
+
+  /** Service-tech HUD: small corner labels (readable for techs, not customer UI). */
+  function ensureStatusHud() {
+    if (statusEl) return statusEl;
+    if (!document.body) return null;
+    statusEl = document.createElement('div');
+    statusEl.id = 'kiosk-tts-status';
+    statusEl.className = 'kiosk-tts-status';
+    statusEl.setAttribute('aria-hidden', 'true');
+    // Inline fallback so the chip stays visible even if CSS cache is stale.
+    statusEl.setAttribute(
+      'style',
+      'position:fixed;left:8px;bottom:18px;z-index:2147483646;display:inline-flex;' +
+        'align-items:center;gap:3px;padding:2px 5px;border:0;border-radius:0;' +
+        'background:transparent;color:rgba(30,32,38,0.55);' +
+        'font:500 12px/1.2 ui-monospace,Consolas,monospace;white-space:nowrap;' +
+        'pointer-events:auto;user-select:none;cursor:default;box-shadow:none;'
+    );
+    statusEl.innerHTML =
+      '<span class="kiosk-tts-status__conn" data-role="connection"></span>' +
+      '<span class="kiosk-tts-status__warm" data-role="warmup"></span>';
+    document.body.appendChild(statusEl);
+    renderStatusHud();
+    return statusEl;
+  }
+
+  function connectionLabel() {
+    if (connectionStatus === 'connected') return '🟢';
+    if (connectionStatus === 'no-connection') return '🔴';
+    return '⚪';
+  }
+
+  function warmLabel() {
+    if (warmStatus === 'warming') return '⏳';
+    if (warmStatus === 'warmed') return '✓';
+    return '–';
+  }
+
+  function statusTitle() {
+    var conn =
+      connectionStatus === 'connected'
+        ? 'connected'
+        : connectionStatus === 'no-connection'
+          ? 'no connection'
+          : 'checking';
+    var warm =
+      warmStatus === 'warming' ? 'warming up' : warmStatus === 'warmed' ? 'warmed up' : 'idle';
+    return 'TTS ' + conn + ' · ' + warm;
+  }
+
+  function renderStatusHud() {
+    if (!statusEl) return;
+    var conn = statusEl.querySelector('[data-role="connection"]');
+    var warm = statusEl.querySelector('[data-role="warmup"]');
+    if (conn) {
+      conn.textContent = connectionLabel();
+      conn.setAttribute('data-state', connectionStatus);
+    }
+    if (warm) {
+      warm.textContent = warmLabel();
+      warm.setAttribute('data-state', warmStatus);
+    }
+    statusEl.setAttribute('data-connection', connectionStatus);
+    statusEl.setAttribute('data-warmup', warmStatus);
+    statusEl.setAttribute('title', statusTitle());
+  }
+
+  function setConnectionStatus(next) {
+    if (connectionStatus === next) return;
+    connectionStatus = next;
+    renderStatusHud();
+    window.dispatchEvent(
+      new CustomEvent('tts-status', {
+        detail: { connection: connectionStatus, warmup: warmStatus }
+      })
+    );
+  }
+
+  function setWarmStatus(next) {
+    if (warmStatus === next) return;
+    warmStatus = next;
+    renderStatusHud();
+    window.dispatchEvent(
+      new CustomEvent('tts-status', {
+        detail: { connection: connectionStatus, warmup: warmStatus }
+      })
+    );
+  }
+
+  function beginGenerate() {
+    generateInFlight += 1;
+    setWarmStatus('warming');
+  }
+
+  function endGenerate() {
+    generateInFlight = Math.max(0, generateInFlight - 1);
+    if (generateInFlight === 0) {
+      // Stay on "warming up" until the warmup/ensure batch marks ready.
+      setWarmStatus(ready ? 'warmed' : 'warming');
+    }
+  }
+
+  function scheduleConnectionProbe() {
+    if (connectionProbeTimer) clearInterval(connectionProbeTimer);
+    if (!cfg.enabled) return;
+    connectionProbeTimer = setInterval(function () {
+      probeKokoro().then(function (ok) {
+        setConnectionStatus(ok ? 'connected' : 'no-connection');
+        if (ok && backend !== 'kokoro') {
+          backend = 'kokoro';
+          log('backend recovered → kokoro');
+        } else if (!ok && backend === 'kokoro') {
+          backend = window.speechSynthesis ? 'speechSynthesis' : 'none';
+          log('backend lost kokoro →', backend);
+        }
+      });
+    }, HEALTH_POLL_MS);
   }
 
   function isBusy() {
@@ -191,14 +315,34 @@
   }
 
   function fetchKokoroWav(text) {
+    beginGenerate();
     return fetch(cfg.ttsUrl.replace(/\/$/, '') + '/api/speak', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'audio/wav' },
       body: JSON.stringify({ text: text, voice: cfg.voice, speed: cfg.speed })
-    }).then(function (res) {
-      if (!res.ok) throw new Error('TTS HTTP ' + res.status);
-      return res.arrayBuffer();
-    });
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          setConnectionStatus('no-connection');
+          throw new Error('TTS HTTP ' + res.status);
+        }
+        setConnectionStatus('connected');
+        return res.arrayBuffer();
+      })
+      .catch(function (err) {
+        setConnectionStatus('no-connection');
+        throw err;
+      })
+      .then(
+        function (buf) {
+          endGenerate();
+          return buf;
+        },
+        function (err) {
+          endGenerate();
+          throw err;
+        }
+      );
   }
 
   function probeKokoro() {
@@ -207,9 +351,12 @@
       mode: 'cors'
     })
       .then(function (res) {
-        return res.ok;
+        var ok = res.ok;
+        setConnectionStatus(ok ? 'connected' : 'no-connection');
+        return ok;
       })
       .catch(function () {
+        setConnectionStatus('no-connection');
         return false;
       });
   }
@@ -785,6 +932,7 @@
 
   function synthesizeClips(unique, label) {
     if (!unique.length) {
+      if (generateInFlight === 0 && ready) setWarmStatus('warmed');
       return Promise.resolve({
         cached: 0,
         stats: { generated: 0, indexeddb: 0, memory: 0, other: 0 }
@@ -793,6 +941,7 @@
     if (backend !== 'kokoro') {
       if (window.speechSynthesis) window.speechSynthesis.getVoices();
       log(label || 'clips', 'skipped wav synth; backend=' + backend, unique.length);
+      if (generateInFlight === 0) setWarmStatus('warmed');
       return Promise.resolve({
         cached: 0,
         stats: { generated: 0, indexeddb: 0, memory: 0, other: 0 }
@@ -811,6 +960,7 @@
           'indexeddb=' + stats.indexeddb,
           'memory=' + stats.memory
         );
+        if (generateInFlight === 0) setWarmStatus('warmed');
         return { cached: unique.length, stats: stats };
       }
       var phrase = unique[i++];
@@ -852,24 +1002,30 @@
     }
     if (!cfg.enabled) {
       ready = true;
+      setConnectionStatus('no-connection');
+      setWarmStatus('warmed');
       readyPromise = Promise.resolve({ backend: 'none', cached: 0 });
       return readyPromise;
     }
 
     var unique = collectUniqueClips(phrases);
+    ensureStatusHud();
 
     readyPromise = probeKokoro().then(function (ok) {
       backend = ok ? 'kokoro' : window.speechSynthesis ? 'speechSynthesis' : 'none';
       log('backend', backend, '(' + unique.length + ' clips)');
+      scheduleConnectionProbe();
 
       if (backend !== 'kokoro') {
         if (window.speechSynthesis) window.speechSynthesis.getVoices();
         ready = true;
+        if (generateInFlight === 0) setWarmStatus('warmed');
         return { backend: backend, cached: 0 };
       }
 
       return synthesizeClips(unique, 'warmup').then(function (result) {
         ready = true;
+        if (generateInFlight === 0) setWarmStatus('warmed');
         return Object.assign({ backend: backend }, result);
       });
     });
@@ -907,9 +1063,26 @@
     pending: function () {
       return pendingParts;
     },
+    status: function () {
+      return {
+        connection: connectionStatus,
+        warmup: warmStatus,
+        generating: generateInFlight > 0,
+        backend: backend
+      };
+    },
     config: cfg
   };
 
   bindUnlock();
   bindButtonInterrupt();
+
+  function mountStatusHud() {
+    ensureStatusHud();
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mountStatusHud);
+  } else {
+    mountStatusHud();
+  }
 })();

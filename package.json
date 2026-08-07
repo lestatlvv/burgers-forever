@@ -2,8 +2,11 @@
   "name": "burgers-forever-qa",
   "private": true,
   "scripts": {
-    "start:all": "bash scripts/start-all.sh",
-    "stop:all": "bash scripts/stop-all.sh",
+    "install:env": "node scripts/install-env.js",
+    "start": "node scripts/start-services.js",
+    "start:all": "node scripts/start-services.js",
+    "stop": "node scripts/stop-services.js",
+    "stop:all": "node scripts/stop-services.js",
     "test:order": "playwright test tests/customer-order-stability.spec.js --reporter=list"
   },
   "devDependencies": {

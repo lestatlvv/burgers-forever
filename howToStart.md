@@ -2,34 +2,19 @@
 
 ## One-command (recommended)
 
-From `burgers-forever.webflow/`:
+From the parent `PO/` folder (or from `burgers-forever/`):
 
 ```bash
-npm run start:all   # Demo Store :5500 + Kokoro TTS :7860
-npm run stop:all    # stop both
+npm run install:env   # create TTS venv + install Python deps
+npm start             # Demo Store :5500 + Kokoro TTS :7860
+npm stop              # stop both
 ```
+
+Aliases: `npm run start:all` / `npm run stop:all`.
 
 TTS is resolved from `../text-to-speech`, `../experiments/text-to-speech`, or `TTS_ROOT`.
 
-## Manual
-
-### 1. Assistive speech (Kokoro)
-
-```bash
-cd /path/to/text-to-speech
-./scripts/run_web.sh
-```
-
-→ [http://127.0.0.1:7860](http://127.0.0.1:7860)
-
-### 2. Demo Store
-
-```bash
-cd burgers-forever.webflow
-python3 -m http.server 5500 --bind 127.0.0.1
-```
-
-→ [http://127.0.0.1:5500/](http://127.0.0.1:5500/)
+See `../HOW_TO_INSTALL_AND_RUN.md` for full prerequisites (Python, Node, VC++ Redistributable on Windows).
 
 ## Controls
 
