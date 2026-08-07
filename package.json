@@ -3,10 +3,16 @@
   "private": true,
   "scripts": {
     "install:env": "node scripts/install-env.js",
-    "start": "node scripts/start-services.js",
+    "start": "node scripts/boot-kiosk.js",
     "start:all": "node scripts/start-services.js",
+    "start:kiosk": "node scripts/boot-kiosk.js",
+    "start:services": "node scripts/start-services.js",
     "stop": "node scripts/stop-services.js",
     "stop:all": "node scripts/stop-services.js",
+    "install:autostart": "node scripts/install-autostart.js",
+    "install:autostart:startup": "node scripts/install-autostart-startup.js",
+    "uninstall:autostart": "node scripts/uninstall-autostart.js",
+    "prepare:autostart": "node scripts/install-env.js && node scripts/install-autostart.js",
     "test:order": "playwright test tests/customer-order-stability.spec.js --reporter=list"
   },
   "devDependencies": {
