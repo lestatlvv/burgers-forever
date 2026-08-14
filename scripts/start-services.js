@@ -149,23 +149,22 @@ function findSystemPython() {
   return null;
 }
 
-function startDetached(command, args, options) {
-  const child = spawn(command, args, {
-    detached: true,
-    stdio: ["ignore", "pipe", "pipe"],
-    windowsHide: true,
-    // Avoid shell:true — on Windows it mangles args and triggers DEP0190.
-    ...options,
-  });
-  return child;
-}
-
-function pipeToLog(child, logPath) {
+function startLoggedDetached(command, args, logPath, options = {}) {
   const out = fs.openSync(logPath, "a");
-  const write = (chunk) => fs.writeSync(out, chunk);
-  child.stdout.on("data", write);
-  child.stderr.on("data", write);
-  child.on("exit", () => fs.closeSync(out));
+  try {
+    const child = spawn(command, args, {
+      detached: true,
+      stdio: ["ignore", out, out],
+      windowsHide: true,
+      // Avoid shell:true — on Windows it mangles args and triggers DEP0190.
+      ...options,
+    });
+    child.unref();
+    return child;
+  } finally {
+    // Child keeps duplicated fds; close the parent's copies so this process can exit.
+    fs.closeSync(out);
+  }
 }
 
 async function main() {
@@ -195,14 +194,13 @@ async function main() {
       fail("Python not found. Install Python 3.12+ and reopen the terminal.");
     }
     fs.writeFileSync(STORE_LOG, "");
-    const child = startDetached(
+    const child = startLoggedDetached(
       python.cmd,
       [...python.prefixArgs, "-m", "http.server", String(STORE_PORT), "--bind", STORE_HOST],
+      STORE_LOG,
       { cwd: STORE_ROOT }
     );
-    pipeToLog(child, STORE_LOG);
     appendPid(child.pid);
-    child.unref();
     console.log(`  • Started Demo Store (pid ${child.pid}) → ${storeUrl}/`);
   }
 
@@ -219,14 +217,12 @@ async function main() {
         .filter(Boolean)
         .join(path.delimiter),
     };
-    const child = startDetached(py, [serverPy], {
+    const child = startLoggedDetached(py, [serverPy], TTS_LOG, {
       cwd: path.join(ttsRoot, "apps", "web"),
       env,
       shell: false,
     });
-    pipeToLog(child, TTS_LOG);
     appendPid(child.pid);
-    child.unref();
     console.log(`  • Started Kokoro TTS (pid ${child.pid}) → ${ttsUrl}/api/health`);
     console.log(`    TTS root: ${ttsRoot}`);
   }
@@ -260,6 +256,7 @@ async function main() {
     Kokoro TTS: ${TTS_LOG}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `);
+  process.exit(0);
 }
 
 main().catch((err) => {

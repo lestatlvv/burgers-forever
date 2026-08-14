@@ -177,25 +177,15 @@ function openFullscreen(url) {
 function startServicesInBackground() {
   const startScript = path.join(__dirname, "start-services.js");
   log(`Starting services via ${startScript}`);
+  // inherit + unref: show start-services output without keeping this process alive
+  // on piped stdout/stderr listeners (those previously made `npm start` hang forever).
   const child = spawn(process.execPath, [startScript], {
     cwd: STORE_ROOT,
     detached: true,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["ignore", "inherit", "inherit"],
     windowsHide: true,
     env: process.env,
   });
-
-  const append = (chunk) => {
-    const text = String(chunk);
-    process.stdout.write(text);
-    try {
-      fs.appendFileSync(BOOT_LOG, text);
-    } catch {
-      // ignore
-    }
-  };
-  child.stdout.on("data", append);
-  child.stderr.on("data", append);
   child.unref();
   return child;
 }
@@ -232,6 +222,7 @@ async function main() {
   // Give the browser a moment to start before this process exits.
   await new Promise((r) => setTimeout(r, 1500));
   log("Boot kiosk done.");
+  process.exit(0);
 }
 
 main().catch((err) => {

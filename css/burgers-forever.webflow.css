@@ -10,6 +10,20 @@
   --768: 768px;
   --white: white;
   --black: black;
+  /* Cart open-button placement. Overridden by html.kiosk-cart-bottom. */
+  --cart-inset-top: auto;
+  --cart-inset-right: 0%;
+  --cart-inset-bottom: 14%;
+  --cart-inset-left: 64%;
+  --cart-translate-x: 0;
+}
+
+html.kiosk-cart-bottom {
+  --cart-inset-top: auto;
+  --cart-inset-right: 40px;
+  --cart-inset-bottom: 110px;
+  --cart-inset-left: auto;
+  --cart-translate-x: 0;
 }
 
 .w-layout-blockcontainer {
@@ -1384,7 +1398,8 @@ img {
 
 .cartcontainer {
   position: absolute;
-  inset: auto 0% 14% 64%;
+  inset: var(--cart-inset-top) var(--cart-inset-right) var(--cart-inset-bottom) var(--cart-inset-left);
+  transform: translateX(var(--cart-translate-x));
   /* Above .add-to-basket (100) / .add-to-basket-large (101) so the basket modal covers them. */
   z-index: 2000;
 }
