@@ -1182,8 +1182,60 @@
     warmup([]).then(cb);
   }
 
+  /**
+   * Play a phrase strictly on the tech-selected output device.
+   * Used for Finish-purchase confirmation — never speechSynthesis / never default
+   * when a custom sink is configured.
+   */
+  function playOnSelectedOutput(text) {
+    if (!text) return Promise.resolve(false);
+    unlock();
+    interrupt();
+    playing = true;
+    currentText = text;
+
+    return ensurePhraseWav(text).then(function () {
+      var url = memory[text];
+      if (!url) {
+        playing = false;
+        currentText = null;
+        return Promise.reject(new Error('no wav for: ' + clipLabel(text)));
+      }
+      if (!window.KioskAudioOutput || typeof window.KioskAudioOutput.playRouted !== 'function') {
+        playing = false;
+        currentText = null;
+        return Promise.reject(new Error('playRouted unavailable'));
+      }
+
+      return window.KioskAudioOutput.resolveLiveSinkId()
+        .then(function (sinkId) {
+          if (!sinkId && window.KioskAudioOutput.hasCustomSink()) {
+            return Promise.reject(new Error('selected output device not available'));
+          }
+          log('playOnSelectedOutput → sink', sinkId || '(default)', window.KioskAudioOutput.getSinkLabel());
+          return window.KioskAudioOutput.playRouted(url, {
+            volume: playbackVolume(),
+            sinkId: sinkId || '',
+            requireSink: !!sinkId || window.KioskAudioOutput.hasCustomSink()
+          });
+        })
+        .then(function (info) {
+          playing = false;
+          currentText = null;
+          log('playOnSelectedOutput done', info && info.label, info && info.sinkId);
+          return true;
+        })
+        .catch(function (err) {
+          playing = false;
+          currentText = null;
+          throw err;
+        });
+    });
+  }
+
   window.SpeechEngine = {
     speak: speak,
+    playOnSelectedOutput: playOnSelectedOutput,
     pause: makePause,
     cancel: cancel,
     interrupt: interrupt,

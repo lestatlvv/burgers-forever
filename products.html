@@ -40,8 +40,7 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     e.stopPropagation();
 
-    // Speak confirmation HERE (user gesture) so setSinkId can route to the
-    // tech-selected output. thank-you.html will skip a duplicate announce.
+    // Speak completion on the tech-selected sink under this user gesture.
     try {
       if (window.SpeechEngine && typeof window.SpeechEngine.unlock === 'function') {
         window.SpeechEngine.unlock();
@@ -53,37 +52,49 @@ document.addEventListener("DOMContentLoaded", () => {
         window.KioskGuide && window.KioskGuide.Phrases
           ? window.KioskGuide.Phrases.orderConfirmed()
           : 'Your order has been completed successfully using the kiosk accessibility feature. To restart the demo, please select the button below.';
-      if (window.SpeechEngine) {
-        if (typeof window.SpeechEngine.ensureClips === 'function') {
-          await window.SpeechEngine.ensureClips([confirmPhrase]);
-        }
-        if (typeof window.SpeechEngine.interrupt === 'function') {
-          window.SpeechEngine.interrupt();
-        }
-        window.SpeechEngine.speak(confirmPhrase, { interrupt: true });
+
+      if (window.SpeechEngine && typeof window.SpeechEngine.playOnSelectedOutput === 'function') {
+        console.info(
+          '[finish] playing on sink:',
+          window.KioskAudioOutput && window.KioskAudioOutput.getSinkLabel
+            ? window.KioskAudioOutput.getSinkLabel()
+            : '(unknown)',
+          window.KioskAudioOutput && window.KioskAudioOutput.getSinkId
+            ? window.KioskAudioOutput.getSinkId()
+            : ''
+        );
+        await window.SpeechEngine.playOnSelectedOutput(confirmPhrase);
         try {
           sessionStorage.setItem('kiosk-order-confirmed-spoken', '1');
         } catch (ssErr) {
           /* ignore */
         }
-        // Wait until the clip finishes (or timeout) so sink-routed audio is heard
-        // before the page unloads.
+      } else if (window.SpeechEngine) {
+        // Legacy fallback
+        if (typeof window.SpeechEngine.ensureClips === 'function') {
+          await window.SpeechEngine.ensureClips([confirmPhrase]);
+        }
+        window.SpeechEngine.speak(confirmPhrase, { interrupt: true });
+        try {
+          sessionStorage.setItem('kiosk-order-confirmed-spoken', '1');
+        } catch (ssErr2) {
+          /* ignore */
+        }
         var waitStart = Date.now();
-        await new Promise(function (resolve) {
-          setTimeout(resolve, 200);
-        });
+        await new Promise(function (resolve) { setTimeout(resolve, 200); });
         while (
           window.SpeechEngine.isBusy &&
           window.SpeechEngine.isBusy() &&
           Date.now() - waitStart < 25000
         ) {
-          await new Promise(function (resolve) {
-            setTimeout(resolve, 120);
-          });
+          await new Promise(function (resolve) { setTimeout(resolve, 120); });
         }
       }
     } catch (prepErr) {
-      console.warn('Order confirm audio failed:', prepErr && prepErr.message);
+      console.error('Order confirm audio failed:', prepErr && prepErr.message);
+      console.error(
+        '→ Open ♪ audio settings, select USB Advanced Audio Device, Play test, then retry.'
+      );
     }
 
     console.log("✓ Button clicked - starting print request...");
@@ -280,8 +291,8 @@ resetTimeout();
     window.KIOSK_SPEECH = { ttsUrl: 'http://127.0.0.1:7860', voice: 'af_heart', speed: 1.05, enabled: true };
   </script>
   <script src="js/demo-products.js?v=20260806l" type="text/javascript"></script>
-  <script src="js/audio-output.js?v=20260814f" type="text/javascript"></script>
-  <script src="js/speech-engine.js?v=20260814f" type="text/javascript"></script>
+  <script src="js/audio-output.js?v=20260814h" type="text/javascript"></script>
+  <script src="js/speech-engine.js?v=20260814h" type="text/javascript"></script>
   <script src="js/keyboard-nav.js?v=20260807i" type="text/javascript"></script>
   <script src="js/kiosk-guide.js?v=20260814g" type="text/javascript"></script>
 </body>

@@ -228,42 +228,104 @@
     );
   }
 
+  function readCookie(name) {
+    try {
+      var parts = String(document.cookie || '').split(';');
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i].trim();
+        if (p.indexOf(name + '=') === 0) {
+          return decodeURIComponent(p.slice(name.length + 1));
+        }
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    return '';
+  }
+
+  function writeCookie(name, value) {
+    try {
+      if (value) {
+        document.cookie =
+          name +
+          '=' +
+          encodeURIComponent(value) +
+          '; path=/; max-age=31536000; SameSite=Lax';
+      } else {
+        document.cookie = name + '=; path=/; max-age=0; SameSite=Lax';
+      }
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
   function getSinkId() {
     if (resolvedSinkId) return resolvedSinkId;
     try {
-      return localStorage.getItem(STORAGE_KEY) || '';
+      var ls = localStorage.getItem(STORAGE_KEY);
+      if (ls) return ls;
     } catch (e) {
-      return '';
+      /* ignore */
     }
+    try {
+      var ss = sessionStorage.getItem(STORAGE_KEY);
+      if (ss) return ss;
+    } catch (e2) {
+      /* ignore */
+    }
+    return readCookie(STORAGE_KEY) || '';
   }
 
   function getSinkLabel() {
     try {
-      return localStorage.getItem(LABEL_KEY) || '';
+      var ls = localStorage.getItem(LABEL_KEY);
+      if (ls) return ls;
     } catch (e) {
-      return '';
+      /* ignore */
     }
+    try {
+      var ss = sessionStorage.getItem(LABEL_KEY);
+      if (ss) return ss;
+    } catch (e2) {
+      /* ignore */
+    }
+    return readCookie(LABEL_KEY) || '';
   }
 
   function setSink(deviceId, label) {
     var id = deviceId || '';
+    var lab = label || '';
     resolvedSinkId = id || null;
     try {
       if (id) {
         localStorage.setItem(STORAGE_KEY, id);
-        localStorage.setItem(LABEL_KEY, label || '');
+        localStorage.setItem(LABEL_KEY, lab);
       } else {
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem(LABEL_KEY);
       }
     } catch (e) {
-      log('persist failed', e && e.message);
+      log('localStorage persist failed', e && e.message);
     }
+    try {
+      if (id) {
+        sessionStorage.setItem(STORAGE_KEY, id);
+        sessionStorage.setItem(LABEL_KEY, lab);
+      } else {
+        sessionStorage.removeItem(STORAGE_KEY);
+        sessionStorage.removeItem(LABEL_KEY);
+      }
+    } catch (e2) {
+      /* ignore */
+    }
+    writeCookie(STORAGE_KEY, id);
+    writeCookie(LABEL_KEY, lab);
     window.dispatchEvent(
       new CustomEvent('kiosk-audio-output-changed', {
-        detail: { sinkId: id, label: label || '' }
+        detail: { sinkId: id, label: lab }
       })
     );
+    log('sink saved:', lab || id || '(default)');
     return id;
   }
 
@@ -275,65 +337,75 @@
     return !!(getSinkId() || getSinkLabel());
   }
 
+  function matchOutputDevice(devices, savedId, savedLabel) {
+    var match = null;
+    if (savedId) {
+      for (var i = 0; i < devices.length; i++) {
+        if (devices[i].deviceId === savedId) {
+          match = devices[i];
+          break;
+        }
+      }
+    }
+    if (!match && savedLabel) {
+      for (var j = 0; j < devices.length; j++) {
+        if (devices[j].label === savedLabel) {
+          match = devices[j];
+          break;
+        }
+      }
+    }
+    if (!match && savedLabel) {
+      var needle = savedLabel.toLowerCase();
+      for (var k = 0; k < devices.length; k++) {
+        var lab = (devices[k].label || '').toLowerCase();
+        if (lab && (lab.indexOf(needle) !== -1 || needle.indexOf(lab) !== -1)) {
+          match = devices[k];
+          break;
+        }
+      }
+    }
+    // Strong preference for the C-Media USB Advanced Audio Device used on this kiosk.
+    if (!match && savedLabel && /usb/i.test(savedLabel)) {
+      for (var u = 0; u < devices.length; u++) {
+        var ul = devices[u].label || '';
+        if (/usb/i.test(ul) && /advanced audio/i.test(ul)) {
+          match = devices[u];
+          break;
+        }
+      }
+    }
+    if (!match && savedLabel && /usb/i.test(savedLabel)) {
+      for (var u2 = 0; u2 < devices.length; u2++) {
+        if (/usb/i.test(devices[u2].label || '') && /audio/i.test(devices[u2].label || '')) {
+          match = devices[u2];
+          break;
+        }
+      }
+    }
+    return match;
+  }
+
   /**
    * deviceId can change after USB replug / browser restart.
    * Re-enumerate and match saved id, then exact label, then fuzzy label.
    */
   function resolveLiveSinkId() {
     if (resolveSinkPromise) return resolveSinkPromise;
-    var savedId = '';
-    var savedLabel = '';
-    try {
-      savedId = localStorage.getItem(STORAGE_KEY) || '';
-      savedLabel = localStorage.getItem(LABEL_KEY) || '';
-    } catch (e) {
-      /* ignore */
-    }
+    var savedId = getSinkId();
+    var savedLabel = getSinkLabel();
+    // Ignore in-memory cache while resolving so we always re-check devices.
+    resolvedSinkId = null;
+
     if (!savedId && !savedLabel) {
-      resolvedSinkId = null;
       return Promise.resolve('');
     }
 
     resolveSinkPromise = listOutputDevices()
       .then(function (devices) {
-        var match = null;
-        if (savedId) {
-          for (var i = 0; i < devices.length; i++) {
-            if (devices[i].deviceId === savedId) {
-              match = devices[i];
-              break;
-            }
-          }
-        }
-        if (!match && savedLabel) {
-          for (var j = 0; j < devices.length; j++) {
-            if (devices[j].label === savedLabel) {
-              match = devices[j];
-              break;
-            }
-          }
-        }
-        if (!match && savedLabel) {
-          var needle = savedLabel.toLowerCase();
-          for (var k = 0; k < devices.length; k++) {
-            var lab = (devices[k].label || '').toLowerCase();
-            if (lab && (lab.indexOf(needle) !== -1 || needle.indexOf(lab) !== -1)) {
-              match = devices[k];
-              break;
-            }
-          }
-        }
-        if (!match && savedLabel && /usb/i.test(savedLabel)) {
-          for (var u = 0; u < devices.length; u++) {
-            if (/usb/i.test(devices[u].label || '') && /audio/i.test(devices[u].label || '')) {
-              match = devices[u];
-              break;
-            }
-          }
-        }
-
+        var match = matchOutputDevice(devices, savedId, savedLabel);
         if (match) {
-          if (match.deviceId !== savedId || match.label !== savedLabel) {
+          if (match.deviceId !== savedId || (match.label && match.label !== savedLabel)) {
             log('resolved sink by label/id →', match.label);
             setSink(match.deviceId, match.label || savedLabel);
           } else {
@@ -584,13 +656,39 @@
             audio.src = url;
             log(
               'playRouted →',
-              audio.sinkId ? audio.sinkId.slice(0, 10) + '…' : '(default)',
+              (audio.sinkId || sinkId || '(default)').toString().slice(0, 12),
               getSinkLabel() || opts.sinkId || ''
             );
-            if (sinkId && audio.sinkId && audio.sinkId !== sinkId) {
-              return Promise.reject(new Error('sinkId mismatch after set'));
-            }
-            return audio.play();
+            return new Promise(function (resolve, reject) {
+              var settled = false;
+              function fail(err) {
+                if (settled) return;
+                settled = true;
+                reject(err || new Error('audio load failed'));
+              }
+              function go() {
+                if (settled) return;
+                settled = true;
+                if (sinkId && audio.sinkId && audio.sinkId !== sinkId) {
+                  reject(new Error('sinkId mismatch after set'));
+                  return;
+                }
+                audio.play().then(resolve).catch(reject);
+              }
+              audio.addEventListener('canplay', go, { once: true });
+              audio.addEventListener('error', function () {
+                fail(new Error('audio error'));
+              }, { once: true });
+              // Some Chromium builds fire canplay late; also try after a short tick.
+              setTimeout(function () {
+                if (!settled && audio.readyState >= 2) go();
+              }, 50);
+              try {
+                audio.load();
+              } catch (e) {
+                /* ignore */
+              }
+            });
           });
         });
       })
