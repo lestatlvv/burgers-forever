@@ -30,6 +30,7 @@
   var backend = 'none'; // 'kokoro' | 'speechSynthesis' | 'none'
   var playGen = 0;
   var currentAudio = null;
+  var currentSource = null; // AudioBufferSourceNode when playing via AudioContext
   var currentUtterance = null;
   var dbPromise = null;
   var unlocked = false;
@@ -75,7 +76,46 @@
       '<span class="kiosk-tts-status__warm" data-role="warmup"></span>';
     document.body.appendChild(statusEl);
     renderStatusHud();
+    if (window.KioskAudioOutput && typeof window.KioskAudioOutput.mountStatusControl === 'function') {
+      window.KioskAudioOutput.mountStatusControl();
+    }
     return statusEl;
+  }
+
+  /** Route <audio> / AudioContext to the tech-selected output device when configured. */
+  function applyOutputSink(audioEl) {
+    if (window.KioskAudioOutput && typeof window.KioskAudioOutput.applyToElement === 'function') {
+      return window.KioskAudioOutput.applyToElement(audioEl);
+    }
+    return Promise.resolve(false);
+  }
+
+  function hasCustomSink() {
+    if (window.KioskAudioOutput && typeof window.KioskAudioOutput.hasCustomSink === 'function') {
+      return window.KioskAudioOutput.hasCustomSink();
+    }
+    return !!(
+      window.KioskAudioOutput &&
+      typeof window.KioskAudioOutput.getSinkId === 'function' &&
+      (window.KioskAudioOutput.getSinkId() ||
+        (window.KioskAudioOutput.getSinkLabel && window.KioskAudioOutput.getSinkLabel()))
+    );
+  }
+
+  function prepareOutputRoute() {
+    if (
+      window.KioskAudioOutput &&
+      typeof window.KioskAudioOutput.prepareForPlayback === 'function'
+    ) {
+      return window.KioskAudioOutput.prepareForPlayback();
+    }
+    return Promise.resolve(false);
+  }
+
+  function stopRoutedOutput() {
+    if (window.KioskAudioOutput && typeof window.KioskAudioOutput.stopRouted === 'function') {
+      window.KioskAudioOutput.stopRouted();
+    }
   }
 
   function connectionLabel() {
@@ -168,12 +208,17 @@
   function unlock() {
     if (unlocked) return;
     unlocked = true;
+    prepareOutputRoute().catch(function () {
+      /* ignore */
+    });
     try {
       var silent = new Audio(
         'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA='
       );
       silent.volume = 0.01;
-      silent.play().catch(function () {
+      applyOutputSink(silent).then(function () {
+        return silent.play();
+      }).catch(function () {
         /* ignore */
       });
     } catch (e) {
@@ -578,6 +623,21 @@
         return { source: 'indexeddb' };
       }
       if (backend !== 'kokoro') {
+        // Custom sink cannot use speechSynthesis — still try Kokoro for a routable WAV.
+        if (hasCustomSink()) {
+          return fetchKokoroWav(text)
+            .then(function (buf) {
+              rememberBlob(text, new Blob([buf], { type: 'audio/wav' }), buf);
+              backend = 'kokoro';
+              return idbPut(key, buf).then(function () {
+                return { source: 'generated' };
+              });
+            })
+            .catch(function (err) {
+              log('kokoro unavailable for custom sink:', err && err.message);
+              return { source: 'speechSynthesis' };
+            });
+        }
         log('no wav cache; will use speechSynthesis:', clipLabel(text));
         return { source: 'speechSynthesis' };
       }
@@ -596,9 +656,38 @@
     });
   }
 
+  /** Always produce a cached WAV when possible (required for custom audio output). */
+  function ensurePhraseWav(text) {
+    return ensurePhrase(text).then(function (info) {
+      if (memory[text] && memoryBuffers[text]) return info;
+      return fetchKokoroWav(text)
+        .then(function (buf) {
+          rememberBlob(text, new Blob([buf], { type: 'audio/wav' }), buf);
+          backend = 'kokoro';
+          return idbPut(cacheKey(text), buf).then(function () {
+            return { source: 'generated' };
+          });
+        })
+        .catch(function (err) {
+          log('ensurePhraseWav failed', err && err.message);
+          return info;
+        });
+    });
+  }
+
   function stopPlaybackOnly() {
     playGen += 1;
     sequence = null;
+    stopRoutedOutput();
+    if (currentSource) {
+      try {
+        currentSource.onended = null;
+        currentSource.stop();
+      } catch (e0) {
+        /* ignore */
+      }
+      currentSource = null;
+    }
     if (currentAudio) {
       try {
         currentAudio.onended = null;
@@ -637,6 +726,7 @@
     if (gen !== playGen) return;
     playing = false;
     currentAudio = null;
+    currentSource = null;
     currentUtterance = null;
     currentText = null;
     sequence = null;
@@ -709,35 +799,75 @@
     return Math.max(0, Math.min(1, vol));
   }
 
+  /**
+   * All kiosk speech WAV playback goes through KioskAudioOutput.playRouted
+   * so every page honors the tech-selected output device.
+   */
   function playOne(text, onEnded) {
     var url = memory[text];
     if (!url) return false;
     log('play from cache:', clipLabel(text));
     var gen = playGen;
-    var audio = new Audio(url);
-    audio.volume = playbackVolume();
-    currentAudio = audio;
     playing = true;
-    var playPromise = audio.play();
-    if (playPromise && typeof playPromise.catch === 'function') {
-      playPromise.catch(function (err) {
-        log('playback blocked', err && err.message);
-        var retry = function () {
-          window.removeEventListener('kb-activity', retry);
-          if (gen !== playGen) return;
-          if (!playOne(text, onEnded)) afterClip(gen, onEnded);
-        };
-        window.addEventListener('kb-activity', retry);
-      });
+    currentAudio = null;
+    currentSource = null;
+
+    function done() {
+      if (gen === playGen) afterClip(gen, onEnded);
     }
-    audio.onended = function () {
-      if (currentAudio === audio) currentAudio = null;
-      afterClip(gen, onEnded);
-    };
+
+    if (!window.KioskAudioOutput || typeof window.KioskAudioOutput.playRouted !== 'function') {
+      log('playRouted missing — cannot guarantee sink routing');
+      var audio = new Audio(url);
+      audio.volume = playbackVolume();
+      currentAudio = audio;
+      audio.onended = done;
+      applyOutputSink(audio).then(function (ok) {
+        if (hasCustomSink() && !ok) {
+          log('refusing default play without playRouted');
+          done();
+          return;
+        }
+        audio.play().catch(function () {
+          done();
+        });
+      });
+      return true;
+    }
+
+    window.KioskAudioOutput.playRouted(url, {
+      volume: playbackVolume(),
+      requireSink: hasCustomSink()
+    })
+      .then(function (info) {
+        log('playRouted ok sink=', (info && info.sinkId) || '(default)', (info && info.label) || '');
+        done();
+      })
+      .catch(function (err) {
+        log('playRouted failed:', err && err.message);
+        // Never fall back to speechSynthesis / default when a custom sink is set.
+        done();
+      });
     return true;
   }
 
   function playSynthOne(text, onEnded) {
+    // speechSynthesis ALWAYS uses the OS default device — ban it when a sink is set.
+    if (hasCustomSink()) {
+      log('custom sink set — forcing WAV instead of speechSynthesis:', clipLabel(text));
+      ensurePhraseWav(text)
+        .then(function () {
+          if (!playOne(text, onEnded)) {
+            log('no routable wav for custom sink; skipping unroutable speechSynthesis');
+            afterClip(playGen, onEnded);
+          }
+        })
+        .catch(function () {
+          afterClip(playGen, onEnded);
+        });
+      return;
+    }
+
     if (!window.speechSynthesis) {
       afterClip(playGen, onEnded);
       return;
@@ -780,30 +910,35 @@
     if (!stitched) return false;
     var url = URL.createObjectURL(new Blob([stitched], { type: 'audio/wav' }));
     log('play stitched (' + parts.length + ' parts):', clipLabel(partsLabel(parts)));
-    var audio = new Audio(url);
-    audio.volume = playbackVolume();
-    currentAudio = audio;
     playing = true;
-    var playPromise = audio.play();
-    if (playPromise && typeof playPromise.catch === 'function') {
-      playPromise.catch(function (err) {
-        log('playback blocked', err && err.message);
-        try {
-          URL.revokeObjectURL(url);
-        } catch (e) {
-          /* ignore */
-        }
-      });
-    }
-    audio.onended = function () {
+    currentAudio = null;
+    currentSource = null;
+
+    function finish() {
       try {
         URL.revokeObjectURL(url);
-      } catch (e2) {
+      } catch (e) {
         /* ignore */
       }
-      if (currentAudio === audio) currentAudio = null;
-      finishCurrent(gen);
-    };
+      if (gen === playGen) finishCurrent(gen);
+    }
+
+    if (!window.KioskAudioOutput || typeof window.KioskAudioOutput.playRouted !== 'function') {
+      finish();
+      return true;
+    }
+
+    window.KioskAudioOutput.playRouted(url, {
+      volume: playbackVolume(),
+      requireSink: hasCustomSink()
+    })
+      .then(function () {
+        finish();
+      })
+      .catch(function (err) {
+        log('stitched playRouted failed:', err && err.message);
+        finish();
+      });
     return true;
   }
 
@@ -841,7 +976,8 @@
     log('sequence prepare (' + parts.length + ' parts):', clipLabel(partsLabel(parts)));
 
     // Fallback TTS: one utterance; pause markers become commas
-    if (backend !== 'kokoro') {
+    // (skipped when a custom sink is set — speechSynthesis ignores setSinkId)
+    if (backend !== 'kokoro' && !hasCustomSink()) {
       playSynthOne(partsForSynth(parts), function () {
         finishCurrent(gen);
       });
@@ -878,22 +1014,42 @@
     opts = opts || {};
     var parts = normalizeParts(input);
     if (!cfg.enabled || !parts.length) return;
-    unlock();
 
-    if (opts.interrupt) {
-      interrupt();
+    function run() {
+      unlock();
+
+      if (opts.interrupt) {
+        interrupt();
+        startSpeak(parts);
+        return;
+      }
+
+      if (isBusy()) {
+        if (partsKey(parts) === currentText) return;
+        pendingParts = parts;
+        log('queued (playing):', clipLabel(partsLabel(parts)));
+        return;
+      }
+
       startSpeak(parts);
+    }
+
+    // Custom sink: resolve live deviceId + permission before any utterance
+    // (covers thank-you focus speech after navigation).
+    if (hasCustomSink()) {
+      prepareOutputRoute()
+        .then(function (ok) {
+          if (!ok) log('speak: custom sink not ready — still attempting routed play');
+          run();
+        })
+        .catch(function (err) {
+          log('speak: prepare failed', err && err.message);
+          run();
+        });
       return;
     }
 
-    if (isBusy()) {
-      if (partsKey(parts) === currentText) return;
-      pendingParts = parts;
-      log('queued (playing):', clipLabel(partsLabel(parts)));
-      return;
-    }
-
-    startSpeak(parts);
+    run();
   }
 
   function collectUniqueClips(phrases) {

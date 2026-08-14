@@ -96,6 +96,112 @@
   text-align: center;
 }
 
+/* Tech-only: open audio output settings (pointer-events enabled on this link). */
+.kiosk-tts-status [data-role='audio-out'],
+.kiosk-tts-status__audio {
+  display: inline-block;
+  pointer-events: auto;
+  cursor: pointer;
+  color: inherit;
+  text-decoration: none;
+  margin-left: 4px;
+  opacity: 0.7;
+  min-width: 1em;
+  text-align: center;
+}
+
+.kiosk-tts-status [data-role='audio-out']:hover,
+.kiosk-tts-status__audio:hover {
+  opacity: 1;
+}
+
+/* Tech PIN gate — overlay only; does not alter Webflow customer layout */
+.kiosk-tech-pin-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 12, 16, 0.72);
+  padding: 24px;
+}
+
+.kiosk-tech-pin {
+  width: min(320px, 100%);
+  background: #24272c;
+  border: 1px solid #3a3f47;
+  border-radius: 12px;
+  padding: 22px 20px 18px;
+  color: #e8eaed;
+  font-family: "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.kiosk-tech-pin__title {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.kiosk-tech-pin__input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #3a3f47;
+  border-radius: 8px;
+  background: #1a1c1f;
+  color: #e8eaed;
+  font-size: 1.35rem;
+  letter-spacing: 0.35em;
+  text-align: center;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+
+.kiosk-tech-pin__input:focus {
+  outline: 2px solid #7eb6ff;
+  outline-offset: 2px;
+}
+
+.kiosk-tech-pin__error {
+  margin: 0 0 10px;
+  min-height: 1.2em;
+  font-size: 0.85rem;
+  color: #f31260;
+}
+
+.kiosk-tech-pin__actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.kiosk-tech-pin__actions button {
+  flex: 1;
+  border: 0;
+  border-radius: 8px;
+  padding: 11px 14px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kiosk-tech-pin__cancel {
+  background: transparent;
+  color: #e8eaed;
+  border: 1px solid #3a3f47 !important;
+}
+
+.kiosk-tech-pin__ok {
+  background: #3d8bfd;
+  color: #fff;
+}
+
+.kiosk-tech-pin__ok:hover {
+  background: #5a9fff;
+}
+
 .kiosk-tts-status [data-role='connection'][data-state='connected'],
 .kiosk-tts-status [data-role='warmup'][data-state='warmed'] {
   filter: none;

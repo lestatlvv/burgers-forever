@@ -1383,28 +1383,18 @@ img {
 }
 
 .cartcontainer {
-  /* Tall rail in the gap between the rightmost product cards and the canvas edge. */
   position: absolute;
-  top: 319px;
-  right: 18px;
-  left: auto;
-  bottom: auto;
-  width: 82px;
+  inset: auto 0% 14% 64%;
   /* Above .add-to-basket (100) / .add-to-basket-large (101) so the basket modal covers them. */
   z-index: 2000;
 }
 
 .cart-button {
   background-color: var(--yellow);
-  width: 82px;
-  height: 1018px;
+  width: 280px;
+  height: 200px;
   box-shadow: 10px 10px 0 0 var(--blue);
-  border-radius: 41px;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: center;
-  padding: 56px 0 28px;
-  gap: 0;
+  border-radius: 20px 200px 200px 20px;
 }
 
 .cart-wrapper {
@@ -1508,37 +1498,27 @@ body > .w-commerce-commercecartcontainerwrapper.cart-wrapper {
 }
 
 .carticon {
-  width: 52px;
-  height: 78px;
+  width: 157px;
+  height: 155px;
   color: var(--hot-pink);
   position: relative;
-  left: 0;
-  margin: 0 !important;
-  flex-shrink: 0;
+  left: 31px;
 }
 
 .cart-button.w-commerce-commercecartopenlink {
   background-color: var(--yellow);
-  padding: 56px 0 28px;
 }
 
 .cart-quantity-2 {
-  width: 44px;
-  height: 44px;
+  width: 50px;
+  height: 50px;
   color: var(--blue);
   border-radius: 50px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin: 18px 0 0 !important;
-  padding: 0;
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 1;
+  padding-top: 13px;
+  font-size: 32px;
   position: relative;
-  bottom: auto;
-  left: auto;
-  min-width: 44px;
+  bottom: 42px;
+  left: -28px;
 }
 
 .thankyoucontainer {

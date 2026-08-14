@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Audio output — kiosk tech</title>
+  <style>
+    :root {
+      --bg: #1a1c1f;
+      --panel: #24272c;
+      --border: #3a3f47;
+      --text: #e8eaed;
+      --muted: #9aa0a6;
+      --accent: #3d8bfd;
+      --accent-hover: #5a9fff;
+      --ok: #3dd68c;
+      --warn: #f5a524;
+      --err: #f31260;
+      --focus: #7eb6ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -20%, #2a3340 0%, transparent 55%),
+        var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    main {
+      width: min(440px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px 28px 24px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 1.35rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+
+    .lead {
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    select {
+      width: 100%;
+      appearance: none;
+      background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' stroke='%239aa0a6' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") right 14px center no-repeat;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 40px 12px 14px;
+      font-size: 1rem;
+      margin-bottom: 16px;
+    }
+
+    select:focus {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    button, .btn {
+      flex: 1 1 auto;
+      min-width: 110px;
+      border: 0;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: #fff;
+      background: var(--accent);
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    button:hover:not(:disabled), .btn:hover { background: var(--accent-hover); }
+    button:focus-visible, .btn:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    button.secondary, .btn.secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    button.secondary:hover:not(:disabled), .btn.secondary:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    #status {
+      min-height: 1.4em;
+      font-size: 0.88rem;
+      line-height: 1.4;
+      color: var(--muted);
+    }
+
+    #status.ok { color: var(--ok); }
+    #status.warn { color: var(--warn); }
+    #status.err { color: var(--err); }
+
+    .hint {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      font-size: 0.78rem;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .hint code {
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 0.85em;
+      color: #c8cdd3;
+    }
+
+    .back-row {
+      margin-bottom: 18px;
+    }
+
+    .back-row .btn {
+      flex: 0 0 auto;
+      min-width: 0;
+      padding: 8px 12px;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <main hidden>
+    <div class="back-row">
+      <a class="btn secondary" id="backLink" href="index.html">← Back to kiosk</a>
+    </div>
+
+    <h1>Audio output</h1>
+    <p class="lead">
+      Choose the speaker or headset used by kiosk speech.
+      Selection is saved automatically and applied on every page (including thank-you).
+    </p>
+
+    <label for="outputDevice">Output device</label>
+    <select id="outputDevice" disabled>
+      <option value="">Loading devices…</option>
+    </select>
+
+    <div class="actions">
+      <button type="button" id="refreshBtn" class="secondary">Refresh</button>
+      <button type="button" id="playBtn" disabled>Play test</button>
+      <button type="button" id="saveBtn" disabled>Save</button>
+    </div>
+
+    <p id="status" role="status" aria-live="polite">Checking…</p>
+
+    <p class="hint">
+      Chrome / Edge over <code>localhost</code> or HTTPS required for device routing.
+      Mic permission unlocks device names only; it is not used for recording.
+      Browser <code>speechSynthesis</code> fallback cannot be routed — Kokoro WAV playback can.
+    </p>
+  </main>
+
+  <script src="js/audio-output.js?v=20260814f"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      var AO = window.KioskAudioOutput;
+      var selectEl = document.getElementById('outputDevice');
+      var playBtn = document.getElementById('playBtn');
+      var saveBtn = document.getElementById('saveBtn');
+      var refreshBtn = document.getElementById('refreshBtn');
+      var statusEl = document.getElementById('status');
+      var backLink = document.getElementById('backLink');
+
+      var params = new URLSearchParams(location.search);
+      var from = params.get('from');
+      if (from && /^[\w./\-?=&%#]+$/.test(from) && from.indexOf('://') === -1) {
+        backLink.href = from;
+      }
+
+      function setStatus(message, kind) {
+        statusEl.textContent = message;
+        statusEl.className = kind || '';
+      }
+
+      function selectedOption() {
+        return selectEl.options[selectEl.selectedIndex] || null;
+      }
+
+      function persistSelection() {
+        var opt = selectedOption();
+        var id = selectEl.value || '';
+        var label = opt ? opt.text : '';
+        AO.setSink(id, label);
+        setStatus('Saved — kiosk speech will use: ' + (label || 'default'), 'ok');
+      }
+
+      function loadDevices() {
+        selectEl.disabled = true;
+        playBtn.disabled = true;
+        saveBtn.disabled = true;
+
+        return AO.listOutputDevices().then(function (outputs) {
+          selectEl.innerHTML = '';
+
+          var defaultOpt = new Option('System default', '');
+          selectEl.appendChild(defaultOpt);
+
+          if (!outputs.length) {
+            setStatus('No audio output devices found.', 'err');
+            selectEl.disabled = false;
+            saveBtn.disabled = false;
+            return;
+          }
+
+          var saved = AO.getSinkId();
+          var savedLabel = AO.getSinkLabel();
+          outputs.forEach(function (device, i) {
+            var label = device.label || ('Audio output ' + (i + 1));
+            selectEl.appendChild(new Option(label, device.deviceId));
+          });
+
+          if (saved) {
+            var match = outputs.some(function (d) { return d.deviceId === saved; });
+            if (match) {
+              selectEl.value = saved;
+            } else if (savedLabel) {
+              var byLabel = outputs.filter(function (d) {
+                return d.label === savedLabel || (d.label && d.label.indexOf(savedLabel) !== -1);
+              })[0];
+              if (byLabel) {
+                selectEl.value = byLabel.deviceId;
+                AO.setSink(byLabel.deviceId, byLabel.label);
+                setStatus('Device id refreshed for: ' + byLabel.label, 'ok');
+              } else {
+                setStatus('Saved device missing — pick another (auto-saves).', 'warn');
+              }
+            } else {
+              setStatus('Saved device missing — pick another (auto-saves).', 'warn');
+            }
+          }
+
+          selectEl.disabled = false;
+          playBtn.disabled = false;
+          saveBtn.disabled = false;
+
+          if (!AO.supportsSinkId()) {
+            setStatus('setSinkId not supported — selection will not route audio.', 'err');
+          } else if (selectEl.value) {
+            var cur = selectedOption();
+            setStatus('Current: ' + (cur ? cur.text : AO.getSinkLabel()), 'ok');
+          } else {
+            setStatus('Ready — ' + outputs.length + ' output(s). Choosing a device auto-saves.', 'ok');
+          }
+        });
+      }
+
+      function startAfterUnlock() {
+        playBtn.addEventListener('click', function () {
+          playBtn.disabled = true;
+          persistSelection();
+          setStatus('Playing test tone…');
+          AO.playTestTone(selectEl.value || '')
+            .then(function () {
+              var opt = selectedOption();
+              setStatus('Saved & heard on: ' + (opt ? opt.text : 'default'), 'ok');
+            })
+            .catch(function (err) {
+              setStatus('Playback error: ' + (err && err.message ? err.message : err), 'err');
+            })
+            .then(function () {
+              playBtn.disabled = false;
+            });
+        });
+
+        saveBtn.addEventListener('click', persistSelection);
+
+        selectEl.addEventListener('change', function () {
+          persistSelection();
+        });
+
+        refreshBtn.addEventListener('click', function () {
+          loadDevices().catch(function (err) {
+            setStatus('Refresh failed: ' + (err && err.message ? err.message : err), 'err');
+          });
+        });
+
+        if (navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === 'function') {
+          navigator.mediaDevices.addEventListener('devicechange', function () {
+            loadDevices().catch(function () {});
+          });
+        }
+
+        // Refresh stale USB deviceIds against saved label before showing the list.
+        var ready = AO.resolveLiveSinkId
+          ? AO.resolveLiveSinkId().catch(function () { return ''; })
+          : Promise.resolve('');
+        ready.then(function () {
+          return loadDevices();
+        }).catch(function (err) {
+          setStatus('Could not load devices: ' + (err && err.message ? err.message : err), 'err');
+        });
+      }
+
+      AO.gateSettingsPage().then(function (ok) {
+        if (ok) startAfterUnlock();
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 /**
  * Kiosk spatial keyboard navigation.
  * Arrow keys / Enter map to logical commands (UP/DOWN/LEFT/RIGHT/SELECT).
- * VOLUME uses the development fallback key "V".
+ * VOLUME uses Storm Pad F17 (KEY_F17 / 187) and the development fallback "V".
  *
  * Product cards are the nav targets (not absolute-positioned Add buttons),
  * because those buttons share one containing block and stack on screen.
@@ -23,7 +23,8 @@
     Right: 'RIGHT',
     NumpadEnter: 'SELECT',
     v: 'VOLUME',
-    V: 'VOLUME'
+    V: 'VOLUME',
+    F17: 'VOLUME'
   };
 
   var COMMAND_TO_DIR = {

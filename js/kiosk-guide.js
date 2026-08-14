@@ -137,7 +137,10 @@
       return [name, CartStems.removedFromCart];
     },
     orderConfirmed: function () {
-      return 'Order confirmed. Thank you for your purchase.';
+      return (
+        'Your order has been completed successfully using the kiosk accessibility feature. ' +
+        'To restart the demo, please select the button below.'
+      );
     },
     anotherPurchase: function () {
       return 'Make another purchase.';
@@ -354,7 +357,17 @@
       var page = (location.pathname || '').split('/').pop() || '';
       lastFocusKey = 'start|' + page;
       if (page.indexOf('thank-you') !== -1) {
-        announce(Phrases.anotherPurchase());
+        // Completion phrase is spoken on Finish purchase; do not also say
+        // "Make another purchase" / old order-confirmed lines here.
+        try {
+          if (sessionStorage.getItem('kiosk-order-confirmed-spoken') === '1') {
+            sessionStorage.removeItem('kiosk-order-confirmed-spoken');
+            return;
+          }
+        } catch (e) {
+          /* ignore */
+        }
+        announce(Phrases.orderConfirmed());
       } else {
         announce(Phrases.startOrder());
       }
@@ -470,7 +483,18 @@
     var page = (location.pathname || '').split('/').pop() || 'index.html';
     if (!page || page === '/' || page === 'index.html') return Phrases.welcome();
     if (page.indexOf('products') !== -1) return Phrases.menuReady();
-    if (page.indexOf('thank-you') !== -1) return Phrases.orderConfirmed();
+    if (page.indexOf('thank-you') !== -1) {
+      // Already spoken on Finish purchase (user-gesture + sink routing).
+      try {
+        if (sessionStorage.getItem('kiosk-order-confirmed-spoken') === '1') {
+          // Keep flag until focus handler clears it, so start-button focus stays silent.
+          return null;
+        }
+      } catch (e) {
+        /* ignore */
+      }
+      return Phrases.orderConfirmed();
+    }
     return null;
   }
 
